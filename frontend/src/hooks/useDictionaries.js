@@ -21,3 +21,8 @@ export function useDictionaries() {
 export function clearDictionaryCache() {
   cache = null;
 }
+
+/** 供非组件工具模块（utils/rules.js）读取已缓存的规则字典；未加载时返回 null。 */
+export function getCachedDictionaries() {
+  return cache;
+}

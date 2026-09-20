@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { inspectionApi } from '../../api/inspections.js';
 import { issueApi } from '../../api/issues.js';
@@ -8,6 +8,7 @@ import Modal from '../../components/Modal.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useDictionaries } from '../../hooks/useDictionaries.js';
 import { toDateTimeInput } from '../../utils/format.js';
+import { deriveDeadline } from '../../utils/rules.js';
 
 export default function IssueFormModal({
   defaultRestroomId,
@@ -17,6 +18,8 @@ export default function IssueFormModal({
 }) {
   const { dictionaries } = useDictionaries();
   const toast = useToast();
+  // 期限是否仍由规则（严重程度 × 上报时间）自动推算；用户手改后停止覆盖
+  const deadlineAuto = useRef(true);
   const [restrooms, setRestrooms] = useState([]);
   const [inspections, setInspections] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -30,9 +33,20 @@ export default function IssueFormModal({
     severity: '一般',
     reporter: '',
     assignee: '',
-    deadline: toDateTimeInput(new Date(Date.now() + 3 * 24 * 3600 * 1000)),
+    deadline: toDateTimeInput(deriveDeadline(new Date(), '一般')),
     initial_remark: '',
   });
+
+  // 字典（规则口径）加载完成后，按当前严重程度校正一次默认期限
+  useEffect(() => {
+    if (dictionaries && deadlineAuto.current) {
+      setForm((prev) => ({
+        ...prev,
+        deadline: toDateTimeInput(deriveDeadline(new Date(), prev.severity)),
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dictionaries]);
 
   useEffect(() => {
     metaApi
@@ -72,6 +86,23 @@ export default function IssueFormModal({
 
   const setValue = (key) => (event) =>
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  // 切换严重程度时，只要期限未被手改过，就按规则重新推算默认期限
+  const setSeverity = (event) => {
+    const severity = event.target.value;
+    setForm((prev) => ({
+      ...prev,
+      severity,
+      deadline: deadlineAuto.current
+        ? toDateTimeInput(deriveDeadline(new Date(), severity))
+        : prev.deadline,
+    }));
+  };
+
+  const setDeadline = (event) => {
+    deadlineAuto.current = false;
+    setForm((prev) => ({ ...prev, deadline: event.target.value }));
+  };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -151,7 +182,7 @@ export default function IssueFormModal({
           </select>
         </Field>
         <Field label="严重程度">
-          <select value={form.severity} onChange={setValue('severity')}>
+          <select value={form.severity} onChange={setSeverity}>
             {(dictionaries?.issue_severity || []).map((item) => (
               <option key={item}>{item}</option>
             ))}
@@ -164,7 +195,7 @@ export default function IssueFormModal({
           <input value={form.assignee} onChange={setValue('assignee')} placeholder="保洁班组 / 责任人" />
         </Field>
         <Field label="整改期限">
-          <input type="datetime-local" value={form.deadline} onChange={setValue('deadline')} />
+          <input type="datetime-local" value={form.deadline} onChange={setDeadline} />
         </Field>
         <Field label="问题描述" full>
           <textarea rows="3" value={form.description} onChange={setValue('description')} />

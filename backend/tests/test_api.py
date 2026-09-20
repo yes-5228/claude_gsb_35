@@ -11,6 +11,17 @@ def test_health_and_dictionaries(client):
     assert "待整改" in payload["issue_status"]
     assert len(payload["inspection_check_items"]) == 8
     assert payload["issue_transitions"]["待整改"] == ["整改中", "已关闭"]
+    # 规则口径必须随字典下发：评分阈值、未闭环状态、期限天数
+    assert payload["inspection_item_max_score"] == 10
+    assert payload["inspection_item_problem_threshold"] == 6
+    assert {item["grade"] for item in payload["grade_thresholds"]} == {
+        "优秀",
+        "良好",
+        "合格",
+    }
+    assert payload["issue_open_status"] == ["待整改", "整改中", "待验收"]
+    assert payload["issue_deadline_days"]["紧急"] == 1
+    assert payload["issue_deadline_days"]["严重"] == 3
 
 
 def test_restroom_crud_and_delete_guard(client, restroom):
@@ -185,6 +196,42 @@ def test_issue_lifecycle(client, restroom):
     # 巡查记录可反查关联问题数量
     detail = client.get(f"/api/v1/inspections/{inspection['id']}").json()
     assert detail["issue_count"] == 1
+
+
+def test_issue_deadline_auto_derived_and_overdue_consistent(client, restroom):
+    """不传期限时按严重程度自动推算；列表筛选与看板统计的超期口径一致。"""
+    before = datetime.now()
+    urgent = client.post(
+        "/api/v1/issues",
+        json={
+            "restroom_id": restroom["id"],
+            "title": "紧急问题",
+            "severity": "紧急",
+            "deadline": None,
+        },
+    ).json()
+    after = datetime.now()
+    urgent_deadline = datetime.fromisoformat(urgent["deadline"])
+    assert before + timedelta(days=1) <= urgent_deadline <= after + timedelta(days=1)
+    assert urgent["code"].startswith("WT-")
+
+    normal_before = datetime.now()
+    normal = client.post(
+        "/api/v1/issues",
+        json={"restroom_id": restroom["id"], "title": "一般问题", "severity": "一般"},
+    ).json()
+    normal_after = datetime.now()
+    normal_deadline = datetime.fromisoformat(normal["deadline"])
+    assert (
+        normal_before + timedelta(days=3)
+        <= normal_deadline
+        <= normal_after + timedelta(days=3)
+    )
+
+    # 两个问题期限都在未来，超期列表为空，看板超期数与列表口径相同
+    listed = client.get("/api/v1/issues", params={"overdue": "true"}).json()
+    assert listed["meta"]["total"] == 0
+    assert client.get("/api/v1/stats/overview").json()["issue_overdue"] == 0
 
 
 def test_issue_requires_matching_restroom(client, restroom):

@@ -7,14 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import (
     ISSUE_TRANSITIONS,
-    OPEN_ISSUE_STATUSES,
     TRANSITION_ACTIONS,
+    IssueSeverity,
     IssueStatus,
 )
 from app.core.exceptions import DomainError, NotFoundError
 from app.models import Inspection, Issue, RectificationRecord, Restroom
 from app.schemas.issue import IssueCreate, IssueOut, IssueStatusUpdate, IssueUpdate
-from app.services import restroom_service
+from app.services import restroom_service, rules
 
 SORTABLE_FIELDS = {
     "report_time": Issue.report_time,
@@ -24,21 +24,6 @@ SORTABLE_FIELDS = {
     "code": Issue.code,
     "updated_at": Issue.updated_at,
 }
-
-
-def _next_code(db: Session) -> str:
-    prefix = datetime.now().strftime("WT-%Y%m%d")
-    seq = (
-        db.scalar(
-            select(func.count()).select_from(Issue).where(Issue.code.like(f"{prefix}-%"))
-        )
-        or 0
-    ) + 1
-    while True:
-        code = f"{prefix}-{seq:03d}"
-        if not db.scalar(select(Issue.id).where(Issue.code == code)):
-            return code
-        seq += 1
 
 
 def _values(data: dict) -> dict:
@@ -56,12 +41,9 @@ def to_out(issue: Issue) -> IssueOut:
     return IssueOut.model_validate(issue)
 
 
-def is_overdue(issue: Issue) -> bool:
-    return (
-        issue.deadline is not None
-        and issue.status in OPEN_ISSUE_STATUSES
-        and issue.deadline < datetime.now()
-    )
+def is_overdue(issue: Issue, *, now: datetime | None = None) -> bool:
+    """超期判定统一委托给规则单一来源 ``rules.is_overdue``。"""
+    return rules.is_overdue(issue.deadline, issue.status, now=now)
 
 
 def list_issues(
@@ -104,17 +86,11 @@ def list_issues(
         stmt = stmt.where(Issue.report_time >= datetime.combine(date_from, time.min))
     if date_to:
         stmt = stmt.where(Issue.report_time <= datetime.combine(date_to, time.max))
+    now = datetime.now()
     if overdue is True:
-        stmt = stmt.where(
-            Issue.deadline.is_not(None),
-            Issue.deadline < datetime.now(),
-            Issue.status.in_(OPEN_ISSUE_STATUSES),
-        )
+        stmt = stmt.where(*rules.overdue_conditions(now))
     elif overdue is False:
-        stmt = stmt.where(
-            or_(Issue.deadline.is_(None), Issue.deadline >= datetime.now()),
-            Issue.status.in_(OPEN_ISSUE_STATUSES),
-        )
+        stmt = stmt.where(*rules.not_overdue_conditions(now))
     if keyword:
         like = f"%{keyword.strip()}%"
         stmt = stmt.where(
@@ -144,10 +120,16 @@ def create_issue(db: Session, payload: IssueCreate) -> Issue:
             raise DomainError("关联的巡查记录与所选公厕不一致")
 
     data = _values(payload.model_dump(exclude={"inspection_id", "report_time", "initial_remark"}))
+    report_time = payload.report_time or datetime.now()
+    # 期限口径单一来源：调用方显式给出则尊重原值（历史数据结论不变），
+    # 否则按严重程度与上报时间从规则模块推算。
+    if data.get("deadline") is None:
+        severity = data.get("severity", IssueSeverity.NORMAL.value)
+        data["deadline"] = rules.derive_deadline(report_time, severity)
     issue = Issue(
-        code=_next_code(db),
+        code=rules.next_issue_code(db),
         inspection_id=payload.inspection_id,
-        report_time=payload.report_time or datetime.now(),
+        report_time=report_time,
         status=IssueStatus.PENDING.value,
         **data,
     )

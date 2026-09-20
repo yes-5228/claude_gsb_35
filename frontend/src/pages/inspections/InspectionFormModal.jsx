@@ -7,7 +7,13 @@ import Modal from '../../components/Modal.jsx';
 import { GradeTag, StatusTag } from '../../components/Tags.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useDictionaries } from '../../hooks/useDictionaries.js';
-import { calcScore, gradeOf, resultOf } from '../../utils/scoring.js';
+import {
+  calcScore,
+  gradeOf,
+  isProblemItem,
+  resultOf,
+  rulesConfig,
+} from '../../utils/rules.js';
 import { toDateTimeInput } from '../../utils/format.js';
 
 export default function InspectionFormModal({ defaultRestroomId, onClose, onSaved }) {
@@ -37,9 +43,10 @@ export default function InspectionFormModal({ defaultRestroomId, onClose, onSave
     setItems(template.map((name) => ({ name, score: 9, remark: '' })));
   }, [dictionaries]);
 
-  const score = useMemo(() => calcScore(items), [items]);
-  const grade = gradeOf(score);
-  const result = resultOf(items, score);
+  const ruleConfig = useMemo(() => rulesConfig(), [dictionaries]);
+  const score = useMemo(() => calcScore(items, ruleConfig), [items, ruleConfig]);
+  const grade = gradeOf(score, ruleConfig);
+  const result = resultOf(items, score, ruleConfig);
 
   const setItemScore = (index, value) => {
     setItems((prev) =>
@@ -158,7 +165,7 @@ export default function InspectionFormModal({ defaultRestroomId, onClose, onSave
 
       <div className="check-grid">
         {items.map((item, index) => (
-          <div className={`check-item${item.score < 6 ? ' is-low' : ''}`} key={item.name}>
+          <div className={`check-item${isProblemItem(item, ruleConfig) ? ' is-low' : ''}`} key={item.name}>
             <div className="name">{item.name}</div>
             <div className="score-line">
               <input

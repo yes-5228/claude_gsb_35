@@ -69,7 +69,7 @@ TRANSITION_ACTIONS: dict[tuple[str, str], str] = {
     (IssueStatus.DONE, IssueStatus.CLOSED): "归档关闭",
 }
 
-# 巡查检查项，每项 0-10 分
+# 巡查检查项目录（每项满分与不合格阈值见 services/rules.py，评分规则单一来源）
 INSPECTION_CHECK_ITEMS: list[str] = [
     "地面与台阶清洁",
     "便池蹲位清洁",
@@ -81,19 +81,9 @@ INSPECTION_CHECK_ITEMS: list[str] = [
     "墙面门窗卫生",
 ]
 
-INSPECTION_ITEM_MAX_SCORE = 10
-
-GRADE_EXCELLENT = "优秀"
-GRADE_GOOD = "良好"
-GRADE_PASS = "合格"
-GRADE_FAIL = "不合格"
-
 # 仍处于整改闭环中的状态，用于统计未整改问题
 OPEN_ISSUE_STATUSES: list[str] = [
     IssueStatus.PENDING,
     IssueStatus.PROCESSING,
     IssueStatus.REVIEWING,
 ]
-
-# 单检查项低于该分数视为不合格项
-INSPECTION_ITEM_PROBLEM_THRESHOLD = 6

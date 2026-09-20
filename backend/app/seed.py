@@ -19,7 +19,7 @@ from app.models import Restroom
 from app.schemas.inspection import InspectionCreate, InspectionItem
 from app.schemas.issue import IssueCreate, IssueStatusUpdate
 from app.schemas.restroom import RestroomCreate
-from app.services import inspection_service, issue_service, restroom_service
+from app.services import inspection_service, issue_service, restroom_service, rules
 
 RANDOM_SEED = 20240913
 
@@ -92,7 +92,7 @@ def _pick_problem(items: list[InspectionItem]) -> str | None:
     """找出最需要整改的检查项：优先取不合格项，否则取得分最低的一项。"""
     if not items:
         return None
-    problems = [item for item in items if item.score < 6]
+    problems = [item for item in items if item.score < rules.INSPECTION_ITEM_PROBLEM_THRESHOLD]
     pool = problems or items
     return min(pool, key=lambda item: item.score).name
 
@@ -169,9 +169,8 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
             else rng.choice([IssueSeverity.NORMAL, IssueSeverity.SERIOUS])
         )
         age_days = (now - summary.inspect_time).days
-        deadline = summary.inspect_time + timedelta(
-            days=1 if severity == IssueSeverity.URGENT else 3
-        )
+        # 期限从规则单一来源推算，保证演示数据与正式录入口径一致
+        deadline = rules.derive_deadline(summary.inspect_time, severity.value)
         issue = issue_service.create_issue(
             db,
             IssueCreate(

@@ -2,6 +2,7 @@
 
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -18,13 +19,54 @@ if TEST_DB.exists():
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.core.database import SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models import Issue  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def client():
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def db_session():
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def make_issue(db_session, restroom):
+    """直接走 ORM 构造问题，供规则单测控制 deadline/status。"""
+    from app.services import rules
+
+    created: list[Issue] = []
+
+    def _make(*, status="待整改", deadline=None, code=None, severity="一般"):
+        issue = Issue(
+            code=code or rules.next_issue_code(db_session),
+            restroom_id=restroom["id"],
+            title=f"规则测试问题 {len(created) + 1}",
+            description="",
+            category="其他",
+            severity=severity,
+            status=status,
+            reporter="测试员",
+            assignee="",
+            report_time=datetime.now(),
+            deadline=deadline,
+        )
+        db_session.add(issue)
+        db_session.commit()
+        db_session.refresh(issue)
+        created.append(issue)
+        return issue
+
+    return _make
 
 
 @pytest.fixture

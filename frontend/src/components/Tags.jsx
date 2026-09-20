@@ -1,4 +1,6 @@
-import { isOverdue, scoreTone, severityTone, statusTone } from '../utils/format.js';
+import { scoreTone, severityTone, statusTone } from '../utils/format.js';
+import { isOverdue } from '../utils/rules.js';
+import { useDictionaries } from '../hooks/useDictionaries.js';
 
 export function StatusTag({ status }) {
   return <span className={`tag ${statusTone(status)}`}>{status}</span>;
@@ -13,6 +15,8 @@ export function ScorePill({ score }) {
 }
 
 export function OverdueTag({ deadline, status }) {
+  // 未闭环状态集合来自后端规则字典，确保与列表筛选/看板统计同一口径
+  useDictionaries();
   if (!isOverdue(deadline, status)) return null;
   return <span className="tag tag-danger">已超期</span>;
 }
