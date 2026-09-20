@@ -8,6 +8,7 @@ import { GradeTag, StatusTag } from '../../components/Tags.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useDictionaries } from '../../hooks/useDictionaries.js';
 import { calcScore, gradeOf, resultOf } from '../../utils/scoring.js';
+import { scoringRules } from '../../utils/rules.js';
 import { toDateTimeInput } from '../../utils/format.js';
 
 export default function InspectionFormModal({ defaultRestroomId, onClose, onSaved }) {
@@ -37,9 +38,10 @@ export default function InspectionFormModal({ defaultRestroomId, onClose, onSave
     setItems(template.map((name) => ({ name, score: 9, remark: '' })));
   }, [dictionaries]);
 
-  const score = useMemo(() => calcScore(items), [items]);
-  const grade = gradeOf(score);
-  const result = resultOf(items, score);
+  const rules = scoringRules(dictionaries);
+  const score = useMemo(() => calcScore(items, rules.maxScore), [items, rules.maxScore]);
+  const grade = gradeOf(score, rules.thresholds);
+  const result = resultOf(items, score, rules);
 
   const setItemScore = (index, value) => {
     setItems((prev) =>

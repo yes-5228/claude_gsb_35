@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import (
     INSPECTION_CHECK_ITEMS,
+    INSPECTION_ITEM_PROBLEM_THRESHOLD,
+    InspectionResult,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
@@ -19,7 +21,7 @@ from app.models import Restroom
 from app.schemas.inspection import InspectionCreate, InspectionItem
 from app.schemas.issue import IssueCreate, IssueStatusUpdate
 from app.schemas.restroom import RestroomCreate
-from app.services import inspection_service, issue_service, restroom_service
+from app.services import inspection_service, issue_service, restroom_service, rules
 
 RANDOM_SEED = 20240913
 
@@ -92,7 +94,7 @@ def _pick_problem(items: list[InspectionItem]) -> str | None:
     """找出最需要整改的检查项：优先取不合格项，否则取得分最低的一项。"""
     if not items:
         return None
-    problems = [item for item in items if item.score < 6]
+    problems = [item for item in items if item.score < INSPECTION_ITEM_PROBLEM_THRESHOLD]
     pool = problems or items
     return min(pool, key=lambda item: item.score).name
 
@@ -158,7 +160,7 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
     created = 0
     for restroom_id, inspection_id in inspection_ids:
         summary = inspection_service.get_inspection(db, inspection_id)
-        if summary.result != "发现问题" or rng.random() > 0.75:
+        if summary.result != InspectionResult.ABNORMAL.value or rng.random() > 0.75:
             continue
         problem_item = _pick_problem([InspectionItem(**item) for item in summary.items])
         category = CATEGORY_BY_ITEM.get(problem_item or "", IssueCategory.OTHER)
@@ -169,9 +171,7 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
             else rng.choice([IssueSeverity.NORMAL, IssueSeverity.SERIOUS])
         )
         age_days = (now - summary.inspect_time).days
-        deadline = summary.inspect_time + timedelta(
-            days=1 if severity == IssueSeverity.URGENT else 3
-        )
+        deadline = rules.default_deadline(severity, summary.inspect_time)
         issue = issue_service.create_issue(
             db,
             IssueCreate(

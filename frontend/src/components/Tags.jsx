@@ -1,4 +1,6 @@
-import { isOverdue, scoreTone, severityTone, statusTone } from '../utils/format.js';
+import { useDictionaries } from '../hooks/useDictionaries.js';
+import { scoreTone, severityTone, statusTone } from '../utils/format.js';
+import { isOverdue, openStatuses } from '../utils/rules.js';
 
 export function StatusTag({ status }) {
   return <span className={`tag ${statusTone(status)}`}>{status}</span>;
@@ -13,7 +15,8 @@ export function ScorePill({ score }) {
 }
 
 export function OverdueTag({ deadline, status }) {
-  if (!isOverdue(deadline, status)) return null;
+  const { dictionaries } = useDictionaries();
+  if (!isOverdue(deadline, status, openStatuses(dictionaries))) return null;
   return <span className="tag tag-danger">已超期</span>;
 }
 

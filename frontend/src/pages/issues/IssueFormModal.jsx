@@ -8,6 +8,7 @@ import Modal from '../../components/Modal.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useDictionaries } from '../../hooks/useDictionaries.js';
 import { toDateTimeInput } from '../../utils/format.js';
+import { defaultDeadline } from '../../utils/rules.js';
 
 export default function IssueFormModal({
   defaultRestroomId,
@@ -30,7 +31,7 @@ export default function IssueFormModal({
     severity: '一般',
     reporter: '',
     assignee: '',
-    deadline: toDateTimeInput(new Date(Date.now() + 3 * 24 * 3600 * 1000)),
+    deadline: toDateTimeInput(defaultDeadline('一般', dictionaries)),
     initial_remark: '',
   });
 

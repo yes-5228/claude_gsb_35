@@ -7,9 +7,16 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.constants import (
+    DEFAULT_RECTIFICATION_DAYS,
+    GRADE_MIN_EXCELLENT,
+    GRADE_MIN_GOOD,
+    GRADE_MIN_PASS,
     INSPECTION_CHECK_ITEMS,
     INSPECTION_ITEM_MAX_SCORE,
+    INSPECTION_ITEM_PROBLEM_THRESHOLD,
+    ISSUE_RECTIFICATION_DAYS,
     ISSUE_TRANSITIONS,
+    OPEN_ISSUE_STATUSES,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
@@ -40,6 +47,12 @@ class Dictionaries(BaseModel):
     inspection_check_items: list[str]
     inspection_item_max_score: int
     issue_transitions: dict[str, list[str]]
+    # 业务规则参数：与 app.services.rules 同源，供前端录入预览与展示取值
+    inspection_grade_thresholds: dict[str, int]
+    inspection_item_problem_threshold: int
+    issue_rectification_days: dict[str, int]
+    issue_default_rectification_days: int
+    issue_open_statuses: list[str]
 
 
 @router.get("/dictionaries", response_model=Dictionaries, summary="枚举字典")
@@ -54,6 +67,15 @@ def get_dictionaries() -> Dictionaries:
         inspection_check_items=list(INSPECTION_CHECK_ITEMS),
         inspection_item_max_score=INSPECTION_ITEM_MAX_SCORE,
         issue_transitions={key: list(value) for key, value in ISSUE_TRANSITIONS.items()},
+        inspection_grade_thresholds={
+            "excellent": GRADE_MIN_EXCELLENT,
+            "good": GRADE_MIN_GOOD,
+            "pass": GRADE_MIN_PASS,
+        },
+        inspection_item_problem_threshold=INSPECTION_ITEM_PROBLEM_THRESHOLD,
+        issue_rectification_days=dict(ISSUE_RECTIFICATION_DAYS),
+        issue_default_rectification_days=DEFAULT_RECTIFICATION_DAYS,
+        issue_open_statuses=list(OPEN_ISSUE_STATUSES),
     )
 
 

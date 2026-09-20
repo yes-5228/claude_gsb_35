@@ -88,6 +88,11 @@ GRADE_GOOD = "良好"
 GRADE_PASS = "合格"
 GRADE_FAIL = "不合格"
 
+# 百分制得分对应的等级下限
+GRADE_MIN_EXCELLENT = 90
+GRADE_MIN_GOOD = 80
+GRADE_MIN_PASS = 70
+
 # 仍处于整改闭环中的状态，用于统计未整改问题
 OPEN_ISSUE_STATUSES: list[str] = [
     IssueStatus.PENDING,
@@ -97,3 +102,15 @@ OPEN_ISSUE_STATUSES: list[str] = [
 
 # 单检查项低于该分数视为不合格项
 INSPECTION_ITEM_PROBLEM_THRESHOLD = 6
+
+# 问题编号规则：WT-上报日期-当日流水号
+ISSUE_CODE_PREFIX = "WT"
+ISSUE_CODE_SEQ_WIDTH = 3
+
+# 按严重程度推算的整改期限（天），未列出的程度取默认值
+ISSUE_RECTIFICATION_DAYS: dict[str, int] = {
+    IssueSeverity.URGENT: 1,
+    IssueSeverity.SERIOUS: 3,
+    IssueSeverity.NORMAL: 3,
+}
+DEFAULT_RECTIFICATION_DAYS = 3

@@ -22,7 +22,7 @@ from app.schemas.stats import (
     RestroomRankItem,
     TrendPoint,
 )
-from app.services import inspection_service, issue_service
+from app.services import inspection_service, issue_service, rules
 
 
 def _count(db: Session, model, *conditions) -> int:
@@ -40,13 +40,7 @@ def overview(db: Session) -> OverviewStats:
 
     issue_total = _count(db, Issue)
     issue_open = _count(db, Issue, Issue.status.in_(OPEN_ISSUE_STATUSES))
-    issue_overdue = _count(
-        db,
-        Issue,
-        Issue.deadline.is_not(None),
-        Issue.deadline < now,
-        Issue.status.in_(OPEN_ISSUE_STATUSES),
-    )
+    issue_overdue = _count(db, Issue, *rules.overdue_conditions(now))
     done_count = _count(db, Issue, Issue.status == IssueStatus.DONE.value)
     closed_count = _count(db, Issue, Issue.status == IssueStatus.CLOSED.value)
     finished = done_count + closed_count

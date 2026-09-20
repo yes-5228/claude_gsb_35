@@ -1,9 +1,13 @@
 import Modal from '../../components/Modal.jsx';
 import DetailList from '../../components/DetailList.jsx';
 import { GradeTag, ScorePill, StatusTag } from '../../components/Tags.jsx';
+import { useDictionaries } from '../../hooks/useDictionaries.js';
 import { formatDateTime } from '../../utils/format.js';
+import { scoringRules } from '../../utils/rules.js';
 
 export default function InspectionDetailModal({ inspection, onClose, onReportIssue }) {
+  const { dictionaries } = useDictionaries();
+  const { problemThreshold } = scoringRules(dictionaries);
   if (!inspection) return null;
 
   return (
@@ -42,11 +46,11 @@ export default function InspectionDetailModal({ inspection, onClose, onReportIss
       <div className="section-title">检查项明细</div>
       <div className="check-grid">
         {(inspection.items || []).map((item) => (
-          <div className={`check-item${item.score < 6 ? ' is-low' : ''}`} key={item.name}>
+          <div className={`check-item${item.score < problemThreshold ? ' is-low' : ''}`} key={item.name}>
             <div className="name">{item.name}</div>
             <div className="score-line">
               <ScorePill score={item.score} />
-              <span className="muted">{item.score >= 6 ? '达标' : '不达标'}</span>
+              <span className="muted">{item.score >= problemThreshold ? '达标' : '不达标'}</span>
             </div>
             {item.remark ? <div className="muted" style={{ fontSize: 12 }}>{item.remark}</div> : null}
           </div>

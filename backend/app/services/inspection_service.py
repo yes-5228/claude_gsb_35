@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import DomainError, NotFoundError
 from app.models import Inspection, Restroom
 from app.schemas.inspection import InspectionCreate, InspectionOut, InspectionUpdate
-from app.services import restroom_service, scoring
+from app.services import restroom_service, rules
 
 SORTABLE_FIELDS = {
     "inspect_time": Inspection.inspect_time,
@@ -103,7 +103,7 @@ def list_inspections(
 def create_inspection(db: Session, payload: InspectionCreate) -> Inspection:
     restroom_service.get_restroom(db, payload.restroom_id)
     items = _normalize_items(payload.items)
-    score, grade, result = scoring.evaluate(items)
+    score, grade, result = rules.evaluate(items)
     inspection = Inspection(
         restroom_id=payload.restroom_id,
         inspector=payload.inspector,
@@ -127,7 +127,7 @@ def update_inspection(db: Session, inspection_id: int, payload: InspectionUpdate
     data = payload.model_dump(exclude_unset=True)
     if data.get("items") is not None:
         items = _normalize_items(payload.items or [])
-        score, grade, result = scoring.evaluate(items)
+        score, grade, result = rules.evaluate(items)
         inspection.items = items
         inspection.score = score
         inspection.grade = grade

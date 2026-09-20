@@ -7,14 +7,13 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import (
     ISSUE_TRANSITIONS,
-    OPEN_ISSUE_STATUSES,
     TRANSITION_ACTIONS,
     IssueStatus,
 )
 from app.core.exceptions import DomainError, NotFoundError
 from app.models import Inspection, Issue, RectificationRecord, Restroom
 from app.schemas.issue import IssueCreate, IssueOut, IssueStatusUpdate, IssueUpdate
-from app.services import restroom_service
+from app.services import restroom_service, rules
 
 SORTABLE_FIELDS = {
     "report_time": Issue.report_time,
@@ -24,21 +23,6 @@ SORTABLE_FIELDS = {
     "code": Issue.code,
     "updated_at": Issue.updated_at,
 }
-
-
-def _next_code(db: Session) -> str:
-    prefix = datetime.now().strftime("WT-%Y%m%d")
-    seq = (
-        db.scalar(
-            select(func.count()).select_from(Issue).where(Issue.code.like(f"{prefix}-%"))
-        )
-        or 0
-    ) + 1
-    while True:
-        code = f"{prefix}-{seq:03d}"
-        if not db.scalar(select(Issue.id).where(Issue.code == code)):
-            return code
-        seq += 1
 
 
 def _values(data: dict) -> dict:
@@ -54,14 +38,6 @@ def get_issue(db: Session, issue_id: int) -> Issue:
 
 def to_out(issue: Issue) -> IssueOut:
     return IssueOut.model_validate(issue)
-
-
-def is_overdue(issue: Issue) -> bool:
-    return (
-        issue.deadline is not None
-        and issue.status in OPEN_ISSUE_STATUSES
-        and issue.deadline < datetime.now()
-    )
 
 
 def list_issues(
@@ -105,16 +81,9 @@ def list_issues(
     if date_to:
         stmt = stmt.where(Issue.report_time <= datetime.combine(date_to, time.max))
     if overdue is True:
-        stmt = stmt.where(
-            Issue.deadline.is_not(None),
-            Issue.deadline < datetime.now(),
-            Issue.status.in_(OPEN_ISSUE_STATUSES),
-        )
+        stmt = stmt.where(*rules.overdue_conditions())
     elif overdue is False:
-        stmt = stmt.where(
-            or_(Issue.deadline.is_(None), Issue.deadline >= datetime.now()),
-            Issue.status.in_(OPEN_ISSUE_STATUSES),
-        )
+        stmt = stmt.where(*rules.not_overdue_conditions())
     if keyword:
         like = f"%{keyword.strip()}%"
         stmt = stmt.where(
@@ -145,7 +114,7 @@ def create_issue(db: Session, payload: IssueCreate) -> Issue:
 
     data = _values(payload.model_dump(exclude={"inspection_id", "report_time", "initial_remark"}))
     issue = Issue(
-        code=_next_code(db),
+        code=rules.next_issue_code(db),
         inspection_id=payload.inspection_id,
         report_time=payload.report_time or datetime.now(),
         status=IssueStatus.PENDING.value,
